@@ -1,0 +1,2205 @@
+---
+title: "CS5801 Coursework Template Proforma"
+author: "2218834"
+date: "`r format(Sys.time(), '09 01, 2023')`"
+output: html_notebook
+version: 1.0
+---
+
+
+```{r}
+# Add code here to load any required libraries with `library()`.  
+# We suggest you use `install.package()` for any required packages externally to this document 
+# since installation only need be done once.
+library(skimr)
+library(validate)
+library(dlookr)
+library(dplyr)
+library(stats)
+library(ggplot2)
+library(devtools)
+library(corrplot)
+library(lessR)
+library(tree)
+```
+
+
+# 1. Organise and clean the data
+
+## 1.1 Subset the data into the specific dataset allocated
+
+```{r}
+# Assign your student id into the variable SID, for example:
+SID <- 2218834                  # This is an example, replace 2101234 with your actual ID
+SIDoffset <- (SID %% 100) + 1    # Your SID mod 100 + 1
+
+load("house-analysis.RDa")
+# Now subset the housing data set
+# Pick every 100th observation starting from your offset
+# Put into your data frame named mydf (you can rename it)
+house_analysis <- house.analysis[seq(from=SIDoffset,to=nrow(house.analysis),by=100),]
+```
+
+
+```{r}
+house<- house_analysis
+```
+
+
+```{r}
+View(house)
+```
+> Displaying data used for analyse
+
+## 1.2 Data quality analysis
+
+
+```{r}
+names(house)
+```
+> Total 12 variables with names
+
+```{r}
+summary(house)
+```
+ > One character variable rest all are numeric
+   mean & median confirms that variables are not normally distributed
+
+```{r}
+str(house)
+```
+> 6 integer variable, 5 numeric variable and heating is only character variable
+
+```{r}
+#First 6 rows of data frame
+head(house)
+
+#Last 6 rows of data frame
+tail(house)
+```
+
+```{r}
+skim(house)
+```
+
+> Histogram distribution and missing and empty values for each variable are displayed
+
+```{r}
+attach(house)
+```
+
+```{r}
+house.rules <-  validator( okid = duplicated(id)==FALSE,
+                           okprice = price > 0,
+                           okmq = mq > 0,
+                           okfloor = floor > 0,
+                           okroom = n_rooms > 0,
+                           okbathroom = n_bathrooms > 0,
+                           okterrace = is.element(has_terrace,c(0,1)),
+                           okalarm = is.element(has_alarm,c(0,1)),
+                           okheating = is.element(heating,c("autonomous","other")),
+                           okac = is.element(has_air_conditioning,c(0,1)),
+                           okalarm = is.element(has_alarm,c(0,1)),
+                           okparking = is.element(has_parking,c(0,1)),
+                           okfurnished = is.element(is_furnished,c(0,1)))
+```
+
+
+```{r}
+qual.check <- confront(house, house.rules)
+summary(qual.check)
+```
+
+> mq and n_rooms variable has value less than or equal to 0
+Inconsistency in heating variable value other than autonomous and other
+
+
+```{r}
+table(house$mq)
+table(house$n_rooms)
+table(house$heating)
+```
+> mq variable has one 0 value it should be greater than 0 need to correct it
+> n_rooms variable has -1 value but n_rooms cannot be -ve either removed or correct it
+> There is one "autonamous" where it is supposed to be "autonomous" in heating variable
+
+```{r}
+table(is.na(house)) # Returns logical value TRUE: if NA value exist in data frame,FALSE: if NA value doesn't exist in data frame
+is.null(house) # checks for null values in data frame
+sum(is.na(house)) #count the number of NA values
+colSums(is.na(house)) # Let me confirm if any NA value exist in any of the columns
+```
+> No NA or NULL values in data 
+
+```{r}
+diagnose(house)
+```
+> Id variable is unique
+> Unique count for heating is 3 instead of 2 
+
+```{r}
+#Special character in ID column
+sp_chr_id<- table(grepl("[[:punct:]]", house$id))
+sp_chr_id
+
+#Special character in MQ column
+sp_chr_mq<-table(grepl("[[:punct:]]", house$mq))
+sp_chr_mq
+
+#Special character in Floor column
+sp_chr_floor<-table(grepl("[[:punct:]]", house$floor))
+sp_chr_floor
+
+#Special character in n_bathrooms column
+sp_chr_bathrooms<-table(grepl("[[:punct:]]", house$n_bathrooms))
+sp_chr_bathrooms
+
+#Special character in has_terrace column
+sp_chr_terrace<-table(grepl("[[:punct:]]", house$has_terrace))
+sp_chr_terrace
+
+#Special character in has_alarm column
+sp_chr_alarm<-table(grepl("[[:punct:]]", house$has_alarm))
+sp_chr_alarm
+
+#Special character in heating column
+sp_chr_heating<-table(grepl("[[:punct:]]", house$heating))
+sp_chr_heating
+
+#Special character in has_air_conditioning column
+sp_chr_ac<-table(grepl("[[:punct:]]", house$has_air_conditioning))
+sp_chr_ac
+
+#Special character in has_parking column
+sp_chr_parking<-table(grepl("[[:punct:]]", house$has_parking))
+sp_chr_parking
+
+#Special character in is_furnished column
+sp_chr_furnished<-table(grepl("[[:punct:]]", house$is_furnished))
+sp_chr_furnished
+
+#Special character in Price column
+options(scipen=0)
+sp_chr_price<-table(grepl("[[:punct:]]", house$price))
+sp_chr_price
+
+#Special character in n_rooms column
+sp_chr_rooms<-table(grepl("[[:punct:]]", house$n_rooms))
+sp_chr_rooms
+
+```
+
+> 17 special character in Price and 1 in n_room
+
+```{r}
+#Special character in Price column
+table(grepl("[[:punct:]]", house$price))
+which(grepl("[[:punct:]]", house$price))
+table(grep("[[:punct:]]",house$price, value=TRUE))
+```
+
+> special characterS are scientific notations
+
+```{r}
+#Special character in n_rooms column
+table(grepl("[[:punct:]]", house$n_rooms))
+which(grepl("[[:punct:]]", house$n_rooms))
+table(grep("[[:punct:]]",house$n_rooms, value=TRUE))
+```
+> index 601 value is negative which is impossible so removing row would be right decision as correct value cannot be determined
+
+
+## 1.3 Data cleaning  
+ 
+> Data quality issues encountered during data analysis
+ Metadata of 'heating' column is misspelled, unique count of heating were 3 instead of 2
+ price variable has 17 scientific notation values which can be removed or replaced with average or converted into numeric values
+ n_rooms variable has negative value and n_rooms cannot be negative row will be dropped
+ mq variable has one value 0 which is impossible so either remove the row or replace with mean value
+
+
+```{r}
+# Check the index at which the misspelled value is present
+which(house$heating=='autonamous')
+
+# replace it with the right value
+house$heating[which(house$heating=='autonamous')]='autonomous'
+table(house$heating)
+```
+> Inconsistency of the heating variable is removed
+
+```{r}
+#Scipen function converts scientific value to numeric value
+
+options(scipen=999)
+table(grep("[[:punct:]]",house$price, value=TRUE))
+table(grepl("[[:punct:]]", house$price))
+```
+> Scientific notations are removed from price
+
+```{r}
+# Check the index at which the misspelled value is present
+house[which(grepl("[[:punct:]]", house$n_rooms)),]
+
+#Removing the -ve value since its a single row
+house<-slice(house,-c(which(grepl("[[:punct:]]", house$n_rooms))))
+table(house$n_rooms)
+```
+> The n_rooms variable is free from negative value
+
+```{r}
+# Replacing value of mq which are 0 with mean of the variable
+house$mq <- replace(house$mq, house$mq == 0, mean(house$mq, na.rm = TRUE)) 
+round(house$mq, 2)
+```
+> The mq variable is free from zero value
+
+```{r}
+house.rules <-  validator( okid = duplicated(id)==FALSE,
+                           okprice = price > 0,
+                           okmq = mq > 0,
+                           okfloor = floor > 0,
+                           okroom = n_rooms > 0,
+                           okbathroom = n_bathrooms > 0,
+                           okterrace = is.element(has_terrace,c(0,1)),
+                           okalarm = is.element(has_alarm,c(0,1)),
+                           okheating = is.element(heating,c("autonomous","other")),
+                           okac = is.element(has_air_conditioning,c(0,1)),
+                           okalarm = is.element(has_alarm,c(0,1)),
+                           okparking = is.element(has_parking,c(0,1)),
+                           okfurnished = is.element(is_furnished,c(0,1)))
+```
+
+
+```{r}
+qual.check2 <- confront(house, house.rules)
+summary(qual.check2)
+```
+> All obervations pass the validation check and there are no issues left that were detected during data analysis
+
+# 2. Exploratory Data Analysis (EDA)
+
+## 2.1 EDA plan
+
+>EDA has 3 levels
+  Summarization 
+   We find Central Tendancy, Measure of Variability that is mean, median, mode, standard deviation, IQR and range for all the variables
+
+> Visualization
+    Numeric data visualised using histogram and boxplot
+    Categorical data visualised using barplot and piechart(not preffered)
+    Visualize relation between price and all other variables using scatterplot
+
+> Normalization
+    Find outliers in data and check if significant or not remove incase not
+    Find relation between numeric variables using corrplot
+    Find the Aggregate relationship between variables
+
+
+## 2.2 EDA and summary of results  
+
+>Central Tendancy
+
+  > Mean calculated for all variables
+  
+
+```{r}
+#Price Mean
+Price_mean<- mean(house$price)
+Price_mean
+```
+
+
+```{r}
+#Mq Mean
+Mq_mean<-mean(house$mq)
+Mq_mean
+```
+
+```{r}
+#Floor Mean
+Floor_mean<-mean(house$floor)
+Floor_mean
+```
+
+```{r}
+#n_rooms Mean
+n_rooms_mean<-mean(house$n_rooms)
+n_rooms_mean
+```
+
+```{r}
+#n_bathrooms Mean
+n_bathrooms_mean<-mean(house$n_bathrooms)
+n_bathrooms_mean
+```
+
+```{r}
+#has_terrace Mean
+has_terrace_mean<-mean(house$has_terrace)
+has_terrace_mean
+```
+
+```{r}
+#has_alarm Mean
+has_alarm_mean<-mean(house$has_alarm)
+has_alarm_mean
+```
+
+```{r}
+#has_AC Mean
+has_AC_mean<-mean(house$has_air_conditioning)
+has_AC_mean
+```
+
+```{r}
+#has_parking Mean
+has_parking_mean<-mean(house$has_parking)
+has_parking_mean
+```
+
+```{r}
+#is_furnished Mean
+is_furnished_mean<-mean(house$is_furnished)
+is_furnished_mean
+```
+
+  > Median calculated for all numeric variables
+  
+```{r}
+#Price Median
+Price_median<- median(house$price)
+Price_median
+```
+
+```{r}
+#Heating Median
+Heating_median<- median(house$heating)
+Heating_median
+```
+
+
+```{r}
+#Mq Median
+Mq_median<-median(house$mq)
+Mq_median
+```
+
+```{r}
+#Floor Median
+Floor_median<-median(house$floor)
+Floor_median
+```
+
+```{r}
+#n_rooms Median
+n_rooms_median<-median(house$n_rooms)
+n_rooms_median
+```
+
+```{r}
+#n_bathrooms Median
+n_bathrooms_median<-median(house$n_bathrooms)
+n_bathrooms_median
+```
+
+```{r}
+#has_terrace Median
+has_terrace_median<-median(house$has_terrace)
+has_terrace_median
+```
+
+```{r}
+#has_alarm Median
+has_alarm_median<-median(house$has_alarm)
+has_alarm_median
+```
+
+```{r}
+#has_AC Median
+has_AC_median<-median(house$has_air_conditioning)
+has_AC_median
+```
+
+```{r}
+#has_parking Median
+has_parking_median<-median(house$has_parking)
+has_parking_median
+```
+
+```{r}
+#is_furnished Median
+is_furnished_median<-median(house$is_furnished)
+is_furnished_median
+```
+
+  
+  > Mode calculated for all numeric variables
+  
+```{r}
+#First we build a mode function as mode is not an in-built function in R.
+
+mode <- function(v) {
+ uniqv <- unique(v)
+ uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+```
+
+> Calculation mode for all numeric variables
+
+```{r}
+#Price Mode
+Price_mode<- mode(house$price)
+Price_mode
+```
+
+```{r}
+#Heating Mode
+Heating_mode <- mode(house$heating)
+Heating_mode
+```
+
+```{r}
+#Mq Mode
+Mq_mode<-mode(house$mq)
+Mq_mode
+```
+
+```{r}
+#Floor Mode
+Floor_mode<-mode(house$floor)
+Floor_mode
+```
+
+```{r}
+#n_rooms Mode
+n_rooms_mode<-mode(house$n_rooms)
+n_rooms_mode
+```
+
+```{r}
+#n_bathrooms Mode
+n_bathrooms_mode<-mode(house$n_bathrooms)
+n_bathrooms_mode
+```
+
+```{r}
+#has_terrace Mode
+has_terrace_mode<-mode(house$has_terrace)
+has_terrace_mode
+```
+
+```{r}
+#has_alarm Mode
+has_alarm_mode<-mode(house$has_alarm)
+has_alarm_mode
+```
+
+```{r}
+#has_AC Mode
+has_AC_mode<-mode(house$has_air_conditioning)
+has_AC_mode
+```
+
+```{r}
+#has_parking Mode
+has_parking_mode<-mode(house$has_parking)
+has_parking_mode
+```
+
+```{r}
+#is_furnished Mode
+is_furnished_mode<-mode(house$is_furnished)
+is_furnished_mode
+```
+  
+  
+>Measure of Variability
+
+  > Standard Deviation calculated for all numeric variables
+  
+```{r}
+#Price Standard Deviation
+Price_sd<- sd(house$price)
+Price_sd
+```
+
+```{r}
+#Mq Standard Deviation
+Mq_sd<-sd(house$mq)
+Mq_sd
+```
+
+```{r}
+#Floor Standard Deviation
+Floor_sd<-sd(house$floor)
+Floor_sd
+```
+
+```{r}
+#n_rooms Standard Deviation
+n_rooms_sd<-sd(house$n_rooms)
+n_rooms_sd
+```
+
+```{r}
+#n_bathrooms Standard Deviation
+n_bathrooms_sd<-sd(house$n_bathrooms)
+n_bathrooms_sd
+```
+
+```{r}
+#has_terrace Standard Deviation
+has_terrace_sd<-sd(house$has_terrace)
+has_terrace_sd
+```
+
+```{r}
+#has_alarm Standard Deviation
+has_alarm_sd<-sd(house$has_alarm)
+has_alarm_sd
+```
+
+```{r}
+#has_AC Standard Deviation
+has_AC_sd<-sd(house$has_air_conditioning)
+has_AC_sd
+```
+
+```{r}
+#has_parking Standard Deviation
+has_parking_sd<-sd(house$has_parking)
+has_parking_sd
+```
+
+```{r}
+#is_furnished Standard Deviation
+is_furnished_sd<-sd(house$is_furnished)
+is_furnished_sd
+```
+  
+  > Variance calculated for all numeric variables
+  
+```{r}
+#Price Variance
+Price_variance<- var(house$price)
+Price_variance
+```
+
+```{r}
+#Mq Variance
+Mq_variance<-var(house$mq)
+Mq_variance
+```
+
+```{r}
+#Floor Variance
+Floor_variance<-var(house$floor)
+Floor_variance
+```
+
+```{r}
+#n_rooms Variance
+n_rooms_variance<-var(house$n_rooms)
+n_rooms_variance
+```
+
+```{r}
+#n_bathrooms Variance
+n_bathrooms_variance<-var(house$n_bathrooms)
+n_bathrooms_variance
+```
+
+```{r}
+#has_terrace Variance
+has_terrace_variance<-var(house$has_terrace)
+has_terrace_variance
+```
+
+```{r}
+#has_alarm Variance
+has_alarm_variance<-var(house$has_alarm)
+has_alarm_variance
+```
+
+```{r}
+#has_AC Variance
+has_AC_variance<-var(house$has_air_conditioning)
+has_AC_variance
+```
+
+```{r}
+#has_parking Variance
+has_parking_variance<-var(house$has_parking)
+has_parking_variance
+```
+
+```{r}
+#is_furnished Variance
+is_furnished_variance<-var(house$is_furnished)
+is_furnished_variance
+```
+  
+  > IQR calculated for all numeric variables
+  
+```{r}
+#Price IQR
+Price_iqr<- quantile(house$price)
+Price_iqr
+```
+
+```{r}
+#Mq IQR
+Mq_iqr<-quantile(house$mq)
+Mq_iqr
+```
+
+```{r}
+#Floor IQR
+Floor_iqr<-quantile(house$floor)
+Floor_iqr
+```
+
+```{r}
+#n_rooms IQR
+n_rooms_iqr<-quantile(house$n_rooms)
+n_rooms_iqr
+```
+
+```{r}
+#n_bathrooms IQR
+n_bathrooms_iqr<-quantile(house$n_bathrooms)
+n_bathrooms_iqr
+```
+
+```{r}
+#has_terrace IQR
+has_terrace_iqr<-quantile(house$has_terrace)
+has_terrace_iqr
+```
+
+```{r}
+#has_alarm IQR
+has_alarm_iqr<-quantile(house$has_alarm)
+has_alarm_iqr
+```
+
+```{r}
+#has_AC IQR
+has_AC_iqr<-quantile(house$has_air_conditioning)
+has_AC_iqr
+```
+
+```{r}
+#has_parking IQR
+has_parking_iqr<-quantile(house$has_parking)
+has_parking_iqr
+```
+
+```{r}
+#is_furnished IQR
+is_furnished_iqr<-quantile(house$is_furnished)
+is_furnished_iqr
+```
+
+
+> Visualization performed on all variables
+
+#Plot Histogram & BoxPlot for all numeric variables.
+
+```{r}
+options(scipen=999)
+
+#BoxPlot for Price
+
+Summary<-boxplot(house$price,main="Boxplot for Price",horizontal = TRUE)$stats
+colnames(Summary)<-c("price")
+rownames(Summary)<-c("Min","First Quartile","Median","Third Quartile","Maximum")
+Summary
+
+#Histogram for Price
+histogram<-hist(house$price, 
+     probability = T,      # use probability rather than count for y-axis
+     main = "Histogram and density plot of price of property",
+     xlab = "Price")
+lines(density(house$price), col="blue", lwd=2)
+
+rangecount<-histogram$count
+rangecount
+histogram$breaks
+```
+> Boxplot of price interpret minimum amount to buy a property is 9500 & maximum property price is 340000
+  Medium of boxplot is 119000
+  First and Third quartiles are 70000 & 178500 respectively
+  Some outliers might be because there are some properties that are very expensive
+  Histogram shows that data is Left skewed.
+  Most properties price range between 50000 to 150000.
+
+```{r}
+#options(scipen=999)
+
+#BoxPlot for MQ
+Summary<- boxplot(house$mq,main="Boxplot for MQ",horizontal = TRUE)$stats
+colnames(Summary)<-c("MQ")
+rownames(Summary)<-c("Min","First Quartile","Median","Third Quartile","Maximum")
+Summary
+
+
+#Histogram for MQ
+histogram<-hist(house$mq, 
+     probability = T,      # use probability rather than count for y-axis
+     main = "Histogram and density plot of MQ of property",
+     xlab = "MQ")
+lines(density(house$mq), col="blue", lwd=2)
+
+rangecount<-histogram$count
+rangecount
+histogram$breaks
+```
+> Boxplot for mq minimum area of property 20 & maximum 215
+  Medium of boxplot is 100
+  First and third quartiles are 75 & 132 respectively
+  Values shown as outliers but considering mq is the size of property, some properties might be huge in comparision to others
+  Histogram shows that data is Left skewed
+  Most properties size range between 50 to 100
+
+```{r}
+
+#BoxPlot for floor
+Summary<-boxplot(house$floor,main="Boxplot for floor",horizontal = TRUE)$stats
+colnames(Summary)<-c("floor")
+rownames(Summary)<-c("Min","First Quartile","Median","Third Quartile","Maximum")
+Summary
+
+#Histogram for floor
+histogram<-hist(house$floor, 
+     probability = T,      # use probability rather than count for y-axis
+     main = "Histogram and density plot of floor of property",
+     xlab = "Floor")
+lines(density(house$floor), col="blue", lwd=2)
+rangecount<-histogram$count
+rangecount
+histogram$breaks
+```
+
+> Boxplot for number of floors in property minimum 1 & maximum 3
+  Medium for boxplot is 2
+  First and third quartiles are 1 & 2 respectively
+  There are maximum 7 floors but plot is considering everything above 3 as outlier
+  Histogram shows that most properties have 1 to 2 floors
+
+```{r}
+#BoxPlot for n_rooms
+Summary<-boxplot(house$n_rooms,main="Boxplot for n_rooms",horizontal = TRUE)$stats
+colnames(Summary)<-c("room")
+rownames(Summary)<-c("Min","First Quartile","Median","Third Quartile","Maximum")
+Summary
+
+#Histogram for n_rooms
+histogram<-hist(house$n_rooms, 
+     probability = T,      # use probability rather than count for y-axis
+     main = "Histogram and density plot of n_rooms of property",
+     xlab = "n_rooms")
+lines(density(house$n_rooms), col="blue", lwd=2)
+rangecount<-histogram$count
+rangecount
+histogram$breaks
+```
+
+> Boxplot for n_rooms in property minimum is 2 & maximum is 5 
+  Medium for the boxplot is 3
+  First and third quartiles are 3 & 4 respectively
+  No outlier
+  Histogram shows that most properties have 3 rooms
+
+```{r}
+#BoxPlot for n_bathrooms
+Summary<-boxplot(house$n_bathrooms,main="Boxplot for n_bathrooms",horizontal = TRUE)$stats
+colnames(Summary)<-c("bathroom")
+rownames(Summary)<-c("Min","First Quartile","Median","Third Quartile","Maximum")
+Summary
+
+#Histogram for n_bathrooms
+histogram<-hist(house$n_bathrooms, 
+     probability = T,      # use probability rather than count for y-axis
+     main = "Histogram and density plot of n_bathrooms of property",
+     xlab = "n_bathrooms")
+lines(density(house$n_bathrooms), col="blue", lwd=2)
+rangecount<-histogram$count
+rangecount
+histogram$breaks
+table(house$n_bathrooms)
+```
+
+> Boxplot for n_bathrooms in property minimum is 1 & maximum is 3 
+  Medium for the boxplot is 1
+  First and third quartiles are 1 & 2 respectively
+  No outlier
+  Histogram shows that most properties have 1 bathrooms
+
+
+```{r}
+#BoxPlot for has_terrace
+Summary<-boxplot(house$has_terrace,main="Boxplot for has_terrace",horizontal = TRUE)$stats
+colnames(Summary)<-c("terrace")
+rownames(Summary)<-c("Min","First Quartile","Median","Third Quartile","Maximum")
+Summary
+
+#Histogram for has_terrace
+histogram<-hist(house$has_terrace, 
+     probability = T,      # use probability rather than count for y-axis
+     main = "Histogram and density plot of has_terrace of property",
+     xlab = "has_terrace")
+lines(density(house$has_terrace), col="blue", lwd=2)
+rangecount<-histogram$count
+rangecount
+histogram$breaks
+```
+
+> Boxplot for  has_terrace shows that most properties do not have a terrace as value is 0
+  Histogram confirms that 87% properties do not have a terrace
+
+```{r}
+#BoxPlot for has_alarm
+Summary<-boxplot(house$has_alarm,main="Boxplot for has_alarm",horizontal = TRUE)$stats
+colnames(Summary)<-c("alarm")
+rownames(Summary)<-c("Min","First Quartile","Median","Third Quartile","Maximum")
+Summary
+
+#Histogram for has_alarm
+histogram<-hist(house$has_alarm, 
+     probability = T,      # use probability rather than count for y-axis
+     main = "Histogram and density plot of has_alarm of property",
+     xlab = "has_alarm")
+lines(density(house$has_alarm), col="blue", lwd=2)
+rangecount<-histogram$count
+rangecount
+histogram$breaks
+```
+
+> Boxplot for  has_alarm shows that most properties do not have alarm as value is 0
+  Histogram confirms that 99% of properties do not have alarm
+
+
+```{r}
+#BoxPlot for has_air_conditioning
+Summary<-boxplot(house$has_air_conditioning,main="Boxplot for has_air_conditioning",horizontal = TRUE)$stats
+colnames(Summary)<-c("AC")
+rownames(Summary)<-c("Min","First Quartile","Median","Third Quartile","Maximum")
+Summary
+
+
+#Histogram for has_air_conditioning
+histogram<-hist(house$has_air_conditioning, 
+     probability = T,      # use probability rather than count for y-axis
+     main = "Histogram and density plot of has_air_conditioning of property",
+     xlab = "has_air_conditioning")
+lines(density(house$has_air_conditioning), col="blue", lwd=2)
+
+rangecount<-histogram$count
+rangecount
+histogram$breaks
+```
+
+> Boxplot for  has_air_conditioner shows that most properties do not have a air conditioner as value is 0
+  Histogram confirms that 69% of properties do not have air conditioner
+
+
+```{r}
+#BoxPlot for has_parking
+Summary<-boxplot(house$has_parking,main="Boxplot for has_parking",horizontal = TRUE)$stats
+colnames(Summary)<-c("parking")
+rownames(Summary)<-c("Min","First Quartile","Median","Third Quartile","Maximum")
+Summary
+
+
+#Histogram for has_parking
+histogram<-hist(house$has_parking, 
+     probability = T,      # use probability rather than count for y-axis
+     main = "Histogram and density plot of has_parking of property",
+     xlab = "has_parking")
+lines(density(house$has_parking), col="blue", lwd=2)
+rangecount<-histogram$count
+rangecount
+histogram$breaks
+```
+
+> Boxplot for has_parking shows that most properties do not have parking as all values are 0
+  Histogram confirms that 98% of properties do not have parking
+
+```{r}
+#BoxPlot for is_furnished
+Summary<-boxplot(house$is_furnished,main="Boxplot for is_furnished",horizontal = TRUE)$stats
+colnames(Summary)<-c("furnished")
+rownames(Summary)<-c("Min","First Quartile","Median","Third Quartile","Maximum")
+Summary
+
+
+#Histogram for is_furnished
+histogram<-hist(house$is_furnished, 
+     probability = T,      # use probability rather than count for y-axis
+     main = "Histogram and density plot of is_furnished of property",
+     xlab = "is_furnished")
+lines(density(house$is_furnished), col="blue", lwd=2)
+rangecount<-histogram$count
+rangecount
+histogram$breaks
+```
+
+> Boxplot for is_furnished shows that most properties are furnished as value is 0
+  Histogram confirms that 92% of properties are furnished
+
+```{r}
+#BarPlot for heating
+ggplot(data = house) + 
+  geom_bar(mapping = aes(x = heating, fill = heating))
+
+#Pie Chart for heating
+
+
+heat<-data.frame(heat1=house$heating)
+PieChart(heat1, hole = 0, values = "%", data = heat, fill=c("skyblue","gold"),main="")
+
+
+table(house$heating)
+```
+> Heating is categorical variable so represent it using barchart and pie chart
+  Around 87%(787) of properties as per visualization are having autonomous heating and 13%(116) are other
+
+```{r}
+#Scatter plot for Price vs id using lm method
+ggplot(data = house, aes(x=id, y=price, colour=price)) +
+      geom_point(shape = 1, size = 2) +
+      scale_colour_gradient(low = "blue", high = "red") +
+      stat_smooth(method="lm", se=TRUE) +    
+      ggtitle("Price vs Id") +
+      xlab("id") + 
+      ylab("price")
+## `geom_smooth()` using formula 'y ~ x'
+```
+> Plot shows most of the properties are within 300000 price range 
+
+```{r}
+#Scatter plot for Price vs mq using lm method
+ggplot(data = house, aes(x=mq, y=price, colour=price)) +
+      geom_point(shape = 1, size = 2) +
+      scale_colour_gradient(low = "blue", high = "red") +
+      stat_smooth(method="lm", se=TRUE) +    
+      ggtitle("Price vs mq") +
+      xlab("mq") + 
+      ylab("price")
+## `geom_smooth()` using formula 'y ~ x'
+```
+> It shows that properties range from the minimum to maximum price belong to size range  from 20 to 200
+  One property has size greater than 600 but price range is just within 150000 
+
+```{r}
+#Performed a Log Transformation 
+ggplot(data = house, aes(x=log(mq), y=sqrt(price), colour=price)) +
+      geom_point(shape = 1, size = 2) +
+      scale_colour_gradient(low = "blue", high = "red") +
+      stat_smooth(method="lm", se=TRUE) +    
+      ggtitle("Price vs mq") +
+      xlab("mq") + 
+      ylab("price")
+```
+> Improved scatter plot because the residuals are normally distributed and view of data is better incase of heteroscadacity using Log
+
+```{r}
+#Scatter plot for Price vs floor using lm method
+ggplot(data = house, aes(x=floor, y=price, colour=price)) +
+      geom_point(shape = 1, size = 2) +
+      scale_colour_gradient(low = "blue", high = "red") +
+      stat_smooth(method="lm", se=TRUE) +    
+      ggtitle("Price vs floor") +
+      xlab("floor") + 
+      ylab("price")
+## `geom_smooth()` using formula 'y ~ x'
+table(house$floor)
+
+```
+> Properties with minimum 1 floor lie in a price range below 100000 to 500000
+  Two properties have 6 floor one is for less than 100000 while other is for 150000
+
+```{r}
+#Scatter plot for Price vs n_rooms using lm method
+ggplot(data = house, aes(x=n_rooms, y=price, colour=price)) +
+      geom_point(shape = 1, size = 2) +
+      scale_colour_gradient(low = "blue", high = "red") +
+      stat_smooth(method="lm", se=TRUE) +    
+      ggtitle("Price vs n_rooms") +
+      xlab("n_rooms") + 
+      ylab("price")
+## `geom_smooth()` using formula 'y ~ x'
+
+```
+> Properties with 2 rooms cost within 300000 mostly just one property is for 500000
+  Property with 4 rooms price range varies from lowest to most expensive for 500000
+  Property with 5 rooms most expensive less than 500000
+
+```{r}
+#Scatter plot for Price vs n_bathrooms using lm method
+ggplot(data = house, aes(x=n_bathrooms, y=price, colour=price)) +
+      geom_point(shape = 1, size = 2) +
+      scale_colour_gradient(low = "blue", high = "red") +
+      stat_smooth(method="lm", se=TRUE) +    
+      ggtitle("Price vs n_bathrooms") +
+      xlab("n_bathrooms") + 
+      ylab("price")
+## `geom_smooth()` using formula 'y ~ x'
+table(house$n_bathrooms)
+
+```
+> Properties with 1 bathroom mostly price range of 400000
+  Two bathrooms is most expensive ranging from minimum to maximum 500000
+  Less properties with 3 bathrooms maximum cost is around 480000 
+
+```{r}
+#Scatter plot for Price vs has_terrace using lm method
+ggplot(data = house, aes(x=has_terrace, y=price, colour=price)) +
+      geom_point(shape = 1, size = 2) +
+      scale_colour_gradient(low = "blue", high = "red") +
+      stat_smooth(method="lm", se=TRUE) +    
+      ggtitle("Price vs has_terrace") +
+      xlab("has_terrace") + 
+      ylab("price")
+## `geom_smooth()` using formula 'y ~ x'
+
+```
+> Properties without terrace are more and are within all price range from the minimum price to maximum 500000
+  Properties with terrace are less and cost within 300000 there are very less properties with terrace above this price range
+
+```{r}
+#Scatter plot for Price vs has_alarm using lm method
+ggplot(data = house, aes(x=has_alarm, y=price, colour=price)) +
+      geom_point(shape = 1, size = 2) +
+      scale_colour_gradient(low = "blue", high = "red") +
+      stat_smooth(method="lm", se=TRUE) +    
+      ggtitle("Price vs has_alarm") +
+      xlab("has_alarm") + 
+      ylab("price")
+## `geom_smooth()` using formula 'y ~ x'
+
+```
+> Properties which do not have alarm are more in number and are within all price range from the minimum price to maximum 500000.
+  The properties with alarm are less in number and cost within 300000.
+
+```{r}
+#Scatter plot for Price vs heating using lm method
+ggplot(data = house, aes(x=heating, y=price, colour=price)) +
+      geom_point(shape = 1, size = 2) +
+      scale_colour_gradient(low = "blue", high = "red") +
+      stat_smooth(method="lm", se=TRUE) +    
+      ggtitle("Price vs heating") +
+      xlab("heating") + 
+      ylab("price")
+## `geom_smooth()` using formula 'y ~ x'
+
+```
+> Properties with autonomous heating are more and within all price range from the minimum price to maximum 500000
+  Properties with other heating are less and mostly cost within 300000 while less properties price more than 300000
+
+```{r}
+#Scatter plot for Price vs has_air_conditioning using lm method
+ggplot(data = house, aes(x=has_air_conditioning, y=price, colour=price)) +
+      geom_point(shape = 1, size = 2) +
+      scale_colour_gradient(low = "blue", high = "red") +
+      stat_smooth(method="lm", se=TRUE) +    
+      ggtitle("Price vs has_air_conditioning") +
+      xlab("has_air_conditioning") + 
+      ylab("price")
+## `geom_smooth()` using formula 'y ~ x'
+
+```
+> Properties without airconditioner are more and price range from the minimum price to maximum 500000
+  Properties with airconditioner are less and mostly cost within 450000 while less properties price more than 300000
+
+```{r}
+#Scatter plot for Price vs has_parking using lm method
+ggplot(data = house, aes(x=has_parking, y=price, colour=price)) +
+      geom_point(shape = 1, size = 2) +
+      scale_colour_gradient(low = "blue", high = "red") +
+      stat_smooth(method="lm", se=TRUE) +    
+      ggtitle("Price vs has_parking") +
+      xlab("has_parking") + 
+      ylab("price")
+## `geom_smooth()` using formula 'y ~ x'
+
+```
+
+> Properties without parking are more and price range from the minimum price to maximum 500000
+  Properties with parking are less and mostly cost within 100000, some properties between 100000 to 300000 and 1 propert is around 410000
+
+
+```{r}
+#Scatter plot for Price vs is_furnished using lm method
+ggplot(data = house, aes(x=is_furnished, y=price, colour=price)) +
+      geom_point(shape = 1, size = 2) +
+      scale_colour_gradient(low = "blue", high = "red") +
+      stat_smooth(method="lm", se=TRUE) +    
+      ggtitle("Price vs is_furnished") +
+      xlab("is_furnished") + 
+      ylab("price")
+## `geom_smooth()` using formula 'y ~ x'
+
+```
+
+> Properties which are not furnished are more and price range from the minimum price to maximum 500000
+  Properties which are furnished are less and cost within 250000, some properties between 350000 to 400000 and 1 property is around 500000
+
+
+## 2.3 Additional insights and issues
+
+> Comparative Boxplot between Price and other attributes
+
+```{r}
+#price~mq boxplot
+options(scipen=999)
+boxplot(data=house, price~mq)
+```
+> boxplot represents that the values are very scattered in the entier range
+
+```{r}
+#price~heating boxplot
+options(scipen=999)
+boxplot(data=house, price~heating)
+```
+
+> Median price for both autonomous and other heating type are almost same
+  Price range for a property can vary drastically plot considers the extreme values which are less in number as outliers
+
+```{r}
+#price~floor boxplot
+options(scipen=999)
+boxplot(data=house, price~floor)
+```
+
+> Median price for properties with 1 & 2 floors is same while other values are considered outliers
+  Properties with 3 & 4 floors have same median price AND have some values as outliers
+  Properties with 6 floors have lowest median price while 7 floors have highest median price
+
+```{r}
+#price~n_rooms boxplot
+options(scipen=999)
+boxplot(data=house, price~n_rooms)
+```
+> Median price for properties with 2 rooms is lowest while with 5 rooms is highest
+  Median price for properties with 3 & 4 rooms is same
+
+```{r}
+#price~n_bathrooms boxplot
+options(scipen=999)
+boxplot(data=house, price~n_bathrooms)
+```
+> Median price for properties with 1 bathroom is lowest while with 3 bathrooms is the highest
+  There are outliers in price for properties with 1 & 2 bathroom but no outlier for properties with 3 bathrooms
+  Range of properties with 3 bathrooms is more wide as compare to other two
+
+```{r}
+#price~has_terrace boxplot
+options(scipen=999)
+boxplot(data=house, price~has_terrace)
+```
+> Median price for properties without terrace is less than the properties with terrace
+  There are bunch of price range considered as outliers for properties without terrace
+
+```{r}
+#price~has_alarm boxplot
+options(scipen=999)
+boxplot(data=house, price~has_alarm)
+```
+> Median price for properties without alarm is less than properties with terrace
+  There are bunch of price range considered as outliers for properties without alarm
+  Boxplot is of shorter length for properties with alarm
+
+```{r}
+#price~has_AC boxplot
+options(scipen=999)
+boxplot(data=house, price~has_air_conditioning)
+```
+> Median price for properties without air conditioner is same as properties with air conditioner
+  There are bunch of price range considered as outliers in both the cases
+
+```{r}
+#price~has_parking boxplot
+options(scipen=999)
+boxplot(data=house, price~has_parking)
+```
+> Median price for properties without parking is more than properties with parking
+  There are bunch of price range considered as outliers for properties without parking and one outlier for property with parking
+
+```{r}
+#price~is_furnished boxplot
+options(scipen=999)
+boxplot(data=house, price~is_furnished)
+```
+> Median price for properties not furnished is more than the properties which are furnished
+> There are bunch of price range considered as outliers for properties which are not furnished and four outliers for properties furnished
+
+> Find Outliers for all variables 
+
+```{r}
+# Outliers in Price Variable
+Price_outlier<- boxplot.stats(house$price)$out 
+Price_outlier
+out_price <- which(house$price %in% c(Price_outlier))
+out_price
+house[out_price,]
+length(out_price)
+min(Price_outlier)
+max(Price_outlier)
+```
+> There are 44 price outliers minimum is 345000 and maximum is 500000
+  Price of property can range between the values considered outlier in real without objection so no need to remove outliers
+
+```{r}
+# Outliers in mq Variable
+mq_outlier<- boxplot.stats(house$mq)$out 
+mq_outlier
+out_mq <- which(house$mq %in% c(mq_outlier))
+out_mq
+house[out_mq,]
+length(out_mq)
+min(mq_outlier)
+max(mq_outlier)
+```
+> There are 61 mq outliers minimum is 220 while maximum is 620
+  Property size can range between values considered as outlier in real without objection so no need to remove outliers
+
+```{r}
+# Outliers in Floor Variable
+Floor_outlier<- boxplot.stats(house$floor)$out 
+Floor_outlier
+out_floor <- which(house$floor %in% c(Floor_outlier))
+out_floor
+house[out_floor,]
+length(out_floor)
+min(Floor_outlier)
+max(Floor_outlier)
+```
+>  There are 52 outliers minimum is 4 while maximum is 7
+   Property floors can range from 4 to 7 in real without objection so no need to remove outliers
+
+```{r}
+# Outliers in n_rooms Variable
+n_rooms_outlier<- boxplot.stats(house$n_rooms)$out 
+n_rooms_outlier
+out_rooms <- which(house$n_rooms %in% c(n_rooms_outlier))
+out_rooms
+house[out_rooms,]
+length(out_rooms)
+```
+>  There are no outliers
+
+
+```{r}
+# Outliers in n_bathrooms Variable
+n_bathrooms_outlier<- boxplot.stats(house$n_bathrooms)$out 
+n_bathrooms_outlier
+out_bathrooms <- which(house$n_bathrooms %in% c(n_bathrooms_outlier))
+out_bathrooms
+house[out_bathrooms,]
+length(out_bathrooms)
+```
+> There are no outliers
+
+
+```{r}
+# Outliers in has_terrace Variable
+has_terrace_outlier<- boxplot.stats(house$has_terrace)$out 
+has_terrace_outlier
+out_has_terrace <- which(house$has_terrace %in% c(has_terrace_outlier))
+out_has_terrace
+house[out_has_terrace,]
+length(out_has_terrace)
+table(house$has_terrace)
+```
+> There are 111 outliers
+  These are all false outliers as has_terrace values are either 1 or 0 so considering 1 as outlier due to less count is incorrect 
+
+```{r}
+# Outliers in has_alarm Variable
+has_alarm_outlier<- boxplot.stats(house$has_alarm)$out 
+has_alarm_outlier
+out_has_alarm <- which(house$has_alarm %in% c(has_alarm_outlier))
+out_has_alarm
+house[out_has_alarm,]
+length(out_has_alarm)
+table(house$has_alarm)
+min(has_alarm_outlier)
+max(has_alarm_outlier)
+
+```
+> There are 9 outliers
+  These are all false outliers as has_alarm values are either 1 or 0 so considering 1 as outlier due to less count is incorrect
+
+```{r}
+# Outliers in has_air_conditioning Variable
+has_AC_outlier<- boxplot.stats(house$has_air_conditioning)$out 
+has_AC_outlier
+out_has_AC <- which(house$has_air_conditioning %in% c(has_AC_outlier))
+out_has_AC
+house[out_has_AC,]
+length(out_has_AC)
+
+
+```
+> There are no outliers
+
+```{r}
+# Outliers in has_parking Variable
+has_parking_outlier<- boxplot.stats(house$has_parking)$out 
+has_parking_outlier
+out_has_parking <- which(house$has_parking %in% c(has_parking_outlier))
+out_has_parking
+house[out_has_parking,]
+length(out_has_parking)
+table(house$has_parking)
+min(has_parking_outlier)
+max(has_parking_outlier)
+
+```
+> There are 12 outliers
+  These are all false outliers as has_parking values are either 1 or 0 so considering 1 as outlier due to less count is incorrect
+
+```{r}
+# Outliers in is_furnished Variable
+is_furnished_outlier<- boxplot.stats(house$is_furnished)$out 
+is_furnished_outlier
+out_is_furnished <- which(house$is_furnished %in% c(is_furnished_outlier))
+out_is_furnished
+house[out_is_furnished,]
+length(out_is_furnished)
+table(house$is_furnished)
+min(is_furnished_outlier)
+max(is_furnished_outlier)
+
+```
+> There are 64 outliers
+  These are all false outliers as is_furnished values are either 1 or 0 so considering 1 as outlier due to less count is incorrect
+
+
+
+> Find correlation between price and other numeric Variables
+
+```{r}
+#Corrplot between id & Price
+cor_id_price<-cor(house$id,house$price)
+cor_id_price
+```
+
+```{r}
+#Corrplot between mq & Price
+cor_mg_price<-cor(house$mq,house$price)
+cor_mg_price
+```
+
+```{r}
+#Corrplot between floor & Price
+cor_floor_price<-cor(house$floor,house$price)
+cor_floor_price
+```
+
+```{r}
+#Corrplot between n_rooms & Price
+cor_rooms_price<-cor(house$n_rooms,house$price)
+cor_rooms_price
+```
+
+```{r}
+#Corrplot between n_bathrooms & Price
+cor_bathrooms_price<-cor(house$n_bathrooms,house$price)
+cor_bathrooms_price
+```
+
+```{r}
+#Corrplot between has_terrace & Price
+cor_terrace_price<-cor(house$has_terrace,house$price)
+cor_terrace_price
+```
+
+```{r}
+#Corrplot between has_alarm & Price
+cor_alarm_price<-cor(house$has_alarm,house$price)
+cor_alarm_price
+```
+
+```{r}
+#Corrplot between has_air_conditioning & Price
+cor_AC_price<-cor(house$has_air_conditioning,house$price)
+cor_AC_price
+```
+
+```{r}
+#Corrplot between has_parking & Price
+cor_parking_price<-cor(house$has_parking,house$price)
+cor_parking_price
+```
+
+```{r}
+#Corrplot between is_furnished & Price
+cor_furnished_price<-cor(house$is_furnished,house$price)
+cor_furnished_price
+```
+
+> Cor value of all the variables with respect to price being the dependent variable 
+
+
+```{r}
+#corrplot can be done only on numerical values.
+
+corplot_data=subset(house,select = -c(heating))
+
+cor_new<-cor(corplot_data)
+corrplot(cor_new, diag=F,type="upper",insig = "p-value",number.digits = 1,addCoef.col = 'black',tl.cex=0.6, number.cex=1)
+```
+> The above corplot suggest strong correlation between:
+   mq and n_rooms(0.5)
+   price and n_bathrooms(0.4)
+   mq and n_bathrooms(0.4)
+   n_rooms and n_bathrooms(0.4)
+   price and mq (0.3)
+   price and n_rooms (0.3)
+
+   
+
+> Aggregate the Price variable with other variables in data frame
+
+```{r}
+#Aggregate price and floor
+house_price.agg_length<-aggregate(house$price~house$floor, FUN="length")
+house_price.agg_median<-aggregate(house$price~house$floor, FUN="median")
+
+house_price.agg_mean<-aggregate(house$price~house$floor, FUN="mean")
+price_floor.m1<-merge(x = house_price.agg_length, y = house_price.agg_median, by = "house$floor")
+price_floor.m2<-merge(x = price_floor.m1, y = house_price.agg_mean, by = "house$floor")
+colnames(price_floor.m2)[1]<-'n_floors'
+colnames(price_floor.m2)[2]<-'price.len_floor'
+colnames(price_floor.m2)[3]<-'price.median_floor'
+colnames(price_floor.m2)[4]<-'price.mean_floor'
+price_floor.m2
+
+```
+
+> There are maximum houses with 1 floor whose median  price is 118000
+   Most expensive house is of 7 floors whose median  price is 146500
+   Least expensive is 6 floor whose median price is 104000
+   House with highest average price is with 4 floors and cost around 174560
+
+
+
+```{r}
+#Aggregate price and n_rooms 
+house_rooms.length<-aggregate(house$price~house$n_rooms, FUN="length")
+house_rooms.median<-aggregate(house$price~house$n_rooms, FUN="median")
+
+house_rooms.agg_mean<-aggregate(house$price~house$n_rooms, FUN="mean")
+price_rooms.m1<-merge(x = house_rooms.length, y = house_rooms.median, by = "house$n_rooms")
+price_rooms.m2<-merge(x = price_rooms.m1, y = house_rooms.agg_mean, by = "house$n_rooms")
+colnames(price_rooms.m2)[1]<-'n_rooms'
+colnames(price_rooms.m2)[2]<-'price.len_rooms'
+colnames(price_rooms.m2)[3]<-'price.median_rooms'
+colnames(price_rooms.m2)[4]<-'price.mean_rooms'
+price_rooms.m2
+```
+
+> Maximum houses just 3 rooms whose median  price is 117500
+  Most expensive house is of 5 rooms whose median  price is 146000
+  Least expensive is 2 rooms whose median price is 80000
+  House with highest average price is with 5 rooms and cost around 175023.49
+
+
+```{r}
+#Aggregate price and n_bathrooms
+
+house_bathrooms.length<-aggregate(house$price~house$n_bathrooms, FUN="length")
+house_bathrooms.median<-aggregate(house$price~house$n_bathrooms, FUN="median")
+house_bathrooms.agg_mean<-aggregate(house$price~house$n_bathrooms, FUN="mean")
+price_bathrooms.m1<-merge(x = house_bathrooms.length, y = house_bathrooms.median, by = "house$n_bathrooms")
+price_bathrooms.m2<-merge(x = price_bathrooms.m1, y = house_bathrooms.agg_mean, by = "house$n_bathrooms")
+colnames(price_bathrooms.m2)[1]<-'n_bathrooms'
+colnames(price_bathrooms.m2)[2]<-'price.len_bathrooms'
+colnames(price_bathrooms.m2)[3]<-'price.median_bathrooms'
+colnames(price_bathrooms.m2)[4]<-'price.mean_bathrooms'
+price_bathrooms.m2
+```
+>  Maximum houses with 3 rooms whose median  price is 238500	
+   Most expensive property is of 3 bathrooms whose median  price is 146000
+   Least expensive is 1 bathroom whose median price is 90000
+   House with highest average price is with 3 bathrooms and cost around 226733.3
+
+
+```{r}
+#Aggregate price and has_terrace
+house_terrace.length<-aggregate(house$price~house$has_terrace, FUN="length")
+house_terrace.median<-aggregate(house$price~house$has_terrace, FUN="median")
+house_terrace.agg_mean<-aggregate(house$price~house$has_terrace, FUN="mean")
+price_terrace.m1<-merge(x = house_terrace.length, y = house_terrace.median, by = "house$has_terrace")
+price_terrace.m2<-merge(x = price_terrace.m1, y = house_terrace.agg_mean, by = "house$has_terrace")
+colnames(price_terrace.m2)[1]<-'has_terrace'
+colnames(price_terrace.m2)[2]<-'price.len_terrace'
+colnames(price_terrace.m2)[3]<-'price.median_terrace'
+colnames(price_terrace.m2)[4]<-'price.mean_terrace'
+price_terrace.m2
+```
+>  There are more properties without terrace
+   Median  price 130000 for properties with terrace and mean price for it is 141400.9
+   Median  price 117500 for properties without terrace and mean price for it is 140410.1
+
+
+```{r}
+#Aggregate price and has_alarm
+house_alarm.length<-aggregate(house$price~house$has_alarm, FUN="length")
+house_alarm.median<-aggregate(house$price~house$has_alarm, FUN="median")
+house_alarm.agg_mean<-aggregate(house$price~house$has_alarm, FUN="mean")
+price_alarm.m1<-merge(x = house_alarm.length, y = house_alarm.median, by = "house$has_alarm")
+price_alarm.m2<-merge(x = price_alarm.m1, y = house_alarm.agg_mean, by = "house$has_alarm")
+colnames(price_alarm.m2)[1]<-'has_alarm'
+colnames(price_alarm.m2)[2]<-'price.len_alarm'
+colnames(price_alarm.m2)[3]<-'price.median_alarm'
+colnames(price_alarm.m2)[4]<-'price.mean_alarm'
+price_alarm.m2
+```
+> There are more properties without alarm
+  Median  price 145000 for properties with alarm and mean price for it is 162555.6
+  Median  price 118000 for properties without alarm and mean price for it is 140310.2
+
+
+```{r}
+#Aggregate price and has_air_conditioning
+house_ac.length<-aggregate(house$price~house$has_air_conditioning, FUN="length")
+house_ac.median<-aggregate(house$price~house$has_air_conditioning, FUN="median")
+house_ac.agg_mean<-aggregate(house$price~house$has_air_conditioning, FUN="mean")
+price_ac.m1<-merge(x = house_ac.length, y = house_ac.median, by = "house$has_air_conditioning")
+price_ac.m2<-merge(x = price_ac.m1, y = house_ac.agg_mean, by = "house$has_air_conditioning")
+colnames(price_ac.m2)[1]<-'has_ac'
+colnames(price_ac.m2)[2]<-'price.len_ac'
+colnames(price_ac.m2)[3]<-'price.median_ac'
+colnames(price_ac.m2)[4]<-'price.mean_ac'
+price_ac.m2
+```
+> There are more properties without AC
+  Median  price 125000 for properties with ac and mean price for it is 150624.9
+  Median  price 114000 for properties without ac and mean price for it is 136181.2
+
+
+```{r}
+#Aggregate price and has_parking
+house_parking.length<-aggregate(house$price~house$has_parking, FUN="length")
+house_parking.median<-aggregate(house$price~house$has_parking, FUN="median")
+house_parking.agg_mean<-aggregate(house$price~house$has_parking, FUN="mean")
+price_parking.m1<-merge(x = house_parking.length, y = house_parking.median, by = "house$has_parking")
+price_parking.m2<-merge(x = price_parking.m1, y = house_parking.agg_mean, by = "house$has_parking")
+colnames(price_parking.m2)[1]<-'has_parking'
+colnames(price_parking.m2)[2]<-'price.len_parking'
+colnames(price_parking.m2)[3]<-'price.median_parking'
+colnames(price_parking.m2)[4]<-'price.mean_parking'
+price_parking.m2
+```
+
+> There are more properties without parking
+  Median  price 80000 for properties with parking and mean price for it is 137666.7
+  Median  price 119000 for properties without parking and mean price for it is 140570.5
+
+
+```{r}
+#Aggregate price and is_furnished 
+house_furnished.length<-aggregate(house$price~house$is_furnished, FUN="length")
+house_furnished.median<-aggregate(house$price~house$is_furnished, FUN="median")
+house_furnished.agg_mean<-aggregate(house$price~house$is_furnished, FUN="mean")
+price_furnished.m1<-merge(x = house_furnished.length, y = house_furnished.median, by = "house$is_furnished")
+price_furnished.m2<-merge(x = price_furnished.m1, y = house_furnished.agg_mean, by = "house$is_furnished")
+colnames(price_furnished.m2)[1]<-'is_furnished'
+colnames(price_furnished.m2)[2]<-'price.len_furnished'
+colnames(price_furnished.m2)[3]<-'price.median_furnished'
+colnames(price_furnished.m2)[4]<-'price.mean_furnished'
+price_furnished.m2
+```
+> There are more properties without terrace
+  Median  price 104000 is for properties with furnished and mean price for it is 135442.2
+  Median  price 119000 is for properties without furnished and mean price for it is 140920.2
+
+
+# 3. Modelling
+
+## 3.1 Explain your analysis plan
+
+> After performing EDA and data cleaning we get clear picture of various variables relationship with price variable
+  Inconsistent data  was removed or corrected as per metadata values, interaction of variables with dependent variable(price) was checked
+  Price is the dependent variable with 11 other variables mix of numeric, categorical and binary performing Multiple Regression to build best fit model with good r-squared and good   F-statistic.Residuals vs fitted graph and qq-plot will be examined base on distribution
+
+## 3.2 Build a model for property price
+
+```{r}
+# Pair plot, diagonal boxes show variable name and all other boxes display a scatterplot between each pairwise combination of variables
+
+pairs(corplot_data,panel = panel.smooth)
+```
+
+
+```{r}
+cor(corplot_data)
+```
+> No obvious multi collinearity (highly correlated explanatory variables) but some plots point to potential linear relationships, so no need to explore transformations further
+
+```{r}
+# Model 1
+# This is our maximal model which includes all variables but without quadratic terms and interactions.
+
+m1.lm<-lm(price~., data=house)
+summary(m1.lm)
+
+plot(m1.lm)
+```
+> The correlation is very low (0.1932) and F-statistic is also not that significant (19.39)
+  mq and n_bathrooms are highly significant whereas floor, n_rooms and  has_air_conditioning are also slightly significant
+  Residual plot looks alright, qq plot looks aligned with some outliers
+  Step function is applied on model check for lowest AIC value in the outcome
+
+```{r}
+#Step Function
+
+step(m1.lm)
+```
+> Model with lowest AIC value 20544.12 further check for significant variables
+
+```{r}
+# Model 2
+# Variables in Lowest AIC value from Model 1. 
+
+m2.lm <- lm(price ~ mq + floor + n_rooms + n_bathrooms + has_air_conditioning, data = house)
+
+summary(m2.lm)
+
+plot(m2.lm)
+
+```
+> Model has all the explanatory variables as significant
+  Correlation is slightly low compare to model1(0.1883) F-statistic has improved significantly(41.62)
+  mq and n_bathrooms are highly significant whereas floor, n_rooms and  has_air_conditioning are also slightly significant
+  Residual plot looks uniform, qq plot looks aligned with some outliers
+
+
+```{r}
+# Model 3
+# Model for interaction between significant variables.
+
+m3.lm<-lm(price ~ mq * floor * n_rooms * n_bathrooms * has_air_conditioning, data = house)
+summary(m3.lm)
+
+plot(m3.lm)
+```
+> No significant variables in this model
+  Correlation is better than previous models(0.2214) but F-statistic reduced drastically than previous model(7.989)
+  Residual plot looks uniform, qq plot looks aligned with some outliers
+
+
+```{r}
+#Step Function
+
+step(m3.lm)
+```
+> Lowest AIC value is 20549.06 is greater than the AIC value for the step function of model1 so preferable to have simpler model
+
+
+
+```{r}
+# Tree Function 
+# Checking for Interactions between the variables using regression trees.
+
+house.tree<-tree(corplot_data$price~., data = corplot_data)
+plot(house.tree)
+text(house.tree)
+```
+>There are two major interaction first between n_bathrooms and mq and second between n_bathroom and id
+
+
+```{r}
+# Model 4
+# Now, Modelling after including the interaction terms in our model.
+
+m4.lm<-lm(price ~. + mq*n_bathrooms*id, data = house)
+summary(m4.lm)
+
+plot(m4.lm)
+```
+> Few significant variables like floor, n_rooms and mq:n_bathrooms
+  Correlation is 0.2065 but F-statistic has again improved to 15.39 from that in model3
+  Residual plot looks uniform, qq plot looks aligned with some outliers, use step() to check if model improves
+
+
+```{r}
+#Step Function
+
+step(m4.lm)
+```
+> Lowest AIC value 20533.85, check if all variables are sgnificant
+
+
+```{r}
+# Model 5
+# Variables in Lowest AIC value from Model 4 step function. 
+
+m5.lm<-lm(formula = price ~ id + mq + floor + n_rooms + n_bathrooms + 
+    has_air_conditioning + mq:n_bathrooms + id:mq + id:n_bathrooms + 
+    id:mq:n_bathrooms, data = house)
+summary(m5.lm)
+
+plot(m5.lm)
+```
+> Few significant variables like floor, n_rooms and mq:n_bathrooms
+  Correlation is 0.2029 but F-statistic is 22.07
+  Residual plot looks uniform, qq plot looks aligned with some outliers
+
+
+```{r}
+# Model 6
+# Lets have a model with all the explanatory variables and adding more relation with the most significant interactions as per the tree function that is n_batrooms interaction with mq and id. 
+
+m6.lm<-lm(price ~. + mq*n_bathrooms+n_bathrooms*id, data = house)
+summary(m6.lm)
+
+plot(m6.lm)
+```
+> Few significant variables like floor and mq:n_bathrooms is most significant out of all variables
+  Correlation is 0.204 and F-statistic is 17.53
+  Residual plot looks uniform, qq plot looks aligned with some outliers, use step() to check if model improves
+
+
+```{r}
+#Step Function
+
+step(m6.lm)
+```
+> Lowest AIC value 20533.8, same as previous so no improvement.Check if all variables are sgnificant
+
+```{r}
+# Model 7
+#Variables in Lowest AIC value from Model 6 step function. 
+
+m7.lm<-lm(formula = price ~ mq + floor + n_rooms + n_bathrooms + heating + 
+    has_air_conditioning + mq:n_bathrooms, data = house)
+summary(m7.lm)
+
+plot(m7.lm)
+
+```
+> Lot of significant variables in this model
+  Intercept, floor, n_rooms,has_air_conditioning and mq:n_bathrooms are most significant variables
+  Correlation is 0.2014 but F-statistic again improved to 32.25 from that in model3
+  Residual plot looks uniform, qq plot looks aligned with some outliers, use step() to check if model improves
+
+
+```{r}
+#Step Function
+
+step(m7.lm)
+```
+> No improvement AIC value same as previous model(20533.8)
+
+
+```{r}
+# Model 8
+# Lets have a model of dependent variable (price) with all significant explanatory variables from last model like n_batrooms interaction with mq and id and variables like floor, n_rooms, has_air_conditioning and heating.
+
+m8.lm <- lm(price ~ n_bathrooms*mq+ n_bathrooms*id + floor + n_rooms + has_air_conditioning+heating, 
+    data = house)
+
+summary(m8.lm)
+
+plot(m8.lm)
+```
+> Few significant variables like floor, n_rooms, has_air_conditioning and n_bathrooms:mq is most significant
+  Correlation is 0.2021 but F-statistic is 25.14
+  Residual plot looks uniform, qq plot looks aligned with some outliers, use step() to check if model improves
+
+```{r}
+#Step Function
+step(m8.lm)
+```
+> No improvement in model lowest AIC value same(20533.8) 
+
+```{r}
+# Model 9
+# Model after including the quadratic terms of the interaction of mq and id:
+
+m9.lm <- lm(price ~ mq + n_bathrooms+id+floor + n_rooms + has_air_conditioning + heating+mq*n_bathrooms+n_bathrooms*id+I(mq^2)+I(id^3), 
+    data = house)
+
+summary(m9.lm)
+
+plot(m9.lm)
+
+```
+> id, floor and mq:n_bathrooms are significant also the quadratic interaction of mq^2 and id^3 interaction are highly significant
+  Correlation is 0.2399 while F statistic is 25.56
+  Residual plot looks uniform, qq plot looks aligned with some outliers, use step() to check if model improves
+
+
+```{r}
+#Step Function
+step(m9.lm)
+```
+> There is improvement in model Lowest AIC value 20495.36
+
+
+```{r}
+# Model 10
+# Using the lowest AIC value.Lets check if all the variables are sgnificant in this by creating the new model.
+
+m10.lm<-lm(formula = price ~ mq + n_bathrooms + id + floor + n_rooms + 
+    has_air_conditioning + I(mq^2) + I(id^3) + mq:n_bathrooms, 
+    data = house)
+
+summary(m10.lm)
+
+plot(m10.lm)
+
+```
+> floor is significant, quadratic interaction of mq^2, mq:n_bathrooms, id and id^3 interaction are highly significant
+  F statistic is 31 and correlation is 0.2381
+  Residual plot looks uniform, qq plot looks aligned with some outliers,use step() to check if model improves
+
+```{r}
+#Step Function
+
+step(m10.lm)
+```
+> No improvement so till now  model 10 is best performing model after adding mq and id as an interaction quadratic term 
+    F-statistic values: 31
+    Co-relation values: 0.2381
+    
+    
+```{r}
+# Model 11
+# Removing the insignificant variables like mq, n_bathrooms and n_rooms from the model 10.
+
+m11.lm<-lm(formula = price ~id + floor + 
+    has_air_conditioning + I(mq^2) + I(id^3) + mq:n_bathrooms, 
+    data = house)
+summary(m11.lm)
+plot(m11.lm)
+```
+> This model has all the significant variables
+  Correlation  0.2305 and F statistic  44.72 that's better than all previous models
+
+## 3.3 Critique model using relevant diagnostics
+
+> The best model found in the section 3.2 is model 11. 
+
+```{r}
+summary(m11.lm)
+plot(m11.lm)
+```
+```{r}
+library(lmtest)
+lmtest::bptest(m11.lm)
+```
+> Confirms that model 11 is Homoscedasticity as the p-value is 0.00 which is less that alpha 0.05 
+So H0 :equal variance Homoscedasticity is accepted while H1: unequal variance Heteroscedasticity is rejected.
+
+
+>Model 11 
+
+$$price=39618.25+0.5897\times \text{id}+8111.20\times \text{floor}-0.8071\times \text{mq^2}-0.0000\times \text{id^3}+374.737\times \text{mq:n_bathrooms}+10750.86\times \text{has_air_conditioning}$$
+
+> R square 0.2305, Fstatistic 44
+  Model with interaction and is best model with balanced Rsquare and Fstatistic values compared to other models 
+  Drawback QQ plot points are not aligned with some outliers
+
+## 3.4 Suggest improvements to your model
+
+> The model can be improved in 2 ways:
+  1. By  adding another interaction term
+  2. By using log transformations to improve model incase of heteroscadicty
+
+
+```{r}
+# Model 12
+# Improving the model by adding another interaction term: n_bathrooms adding n_bathroom interaction term to model 11
+
+m12.lm<-lm(formula = price ~ id + floor + 
+    has_air_conditioning + I(mq^2) + I(id^3) + mq:n_bathrooms+I(n_bathrooms^5), 
+    data = house)
+summary(m12.lm)
+
+plot(m12.lm)
+```
+> floor and n_bathrooms^5 are significant and quadratic interaction of mq^2, mq:n_bathrooms, id and id^3 interaction are highly significant
+  Residual plot looks uniform, qq plot looks aligned with some outliers
+  Correlation 0.2365 while Fstatistic 39.61
+
+
+```{r}
+#Step Function
+step(m12.lm)
+```
+> Lowest AIC value 20493.18, model similar to previous
+
+
+```{r}
+# Model 13
+# Taking all the interactions from model 12 but removing has_air_conditioning to see the change in results.
+
+m13.lm<-lm(formula = price ~ id + floor + I(mq^2) + I(id^3) + mq:n_bathrooms+I(n_bathrooms^5), 
+    data = house)
+summary(m13.lm)
+
+plot(m13.lm)
+
+```
+> All the variables are significant for this model
+  Residual plot looks uniform, qq plot looks aligned with some outliers
+  Correlation 0.2341 while F statistic 45.63
+
+
+```{r}
+# Model 14
+# Improving the model using log transformations:
+
+m14.lm<-lm(formula = log(price) ~ id + floor + I(mq^2) + I(id^3) + mq:n_bathrooms+I(n_bathrooms^5), 
+    data = house)
+
+summary(m14.lm)
+
+plot(m14.lm)
+
+```
+
+> Model not improving after log transformations as F statistic and R-square reduced
+  Model 13 is best performing model due to better correlation(0.2341) and F-Statistic values(45.63)
+ 
+
+$$price=37682.30+0.5896\times \text{id}+8099.20\times \text{floor}-1.0453\times \text{mq^2}-0.0000\times \text{id^3}+458.241\times \text{mq:n_bathrooms}-263.13\times \text{n_bathrooms^5}$$
+> Equation for price wrt coefficients derived from best performing model(m13), is written above with all variables being significant
+
+# 4. Extension work
+
+## 4.1 Model the likelihood of a property being furnished (using the is_furnished variable provided).
+
+
+```{r}
+#Checking for the frequency table for is_furnished column
+
+table(house$is_furnished)
+
+#properties not furnished are 839 while furnished are  64
+
+```
+
+
+```{r}
+# Tree Function 
+# Checking for interaction between the variables, when the root variable is is_furnished using regression trees
+
+house.tree<-tree(corplot_data$is_furnished~., data = corplot_data)
+plot(house.tree)
+text(house.tree)
+```
+> has_air_conditioning is important factor affecting if property is furnished or not. Id is important in the absence and presence of air conditioner
+  mq and price are affecting weather a property is furnished or not
+
+
+#Plotting mosiacplot displaying distribution of is_funished, wrt other columns
+
+```{r}
+mosaicplot(house$is_furnished~ house$floor, main = "Mosaic Plot of property is furnished or not by floor", ylab="floor", xlab="Property is furnished")
+# Number of Properties with floors 1 and 2 being unfurnished are high
+```
+
+
+```{r}
+mosaicplot(house$is_furnished~ house$n_rooms, main = "Mosaic Plot of property is furnished or not by rooms", ylab="rooms", xlab="Property is furnished")
+# Number of Properties with 3 rooms being unfurnished are high
+```
+
+```{r}
+mosaicplot(house$is_furnished~ house$n_bathrooms, main = "Mosaic Plot of property is furnished or not by bathroom", ylab="bathroom", xlab="Property is furnished")
+# Number of Properties with 1 bathroom being unfurnished are high
+
+```
+
+```{r}
+mosaicplot(house$is_furnished~ house$has_terrace, main = "Mosaic Plot of property is furnished or not by terrace", ylab="terrace", xlab="Property is furnished")
+ #Number of Properties without terrace being unfurnished are high
+
+```
+
+```{r}
+mosaicplot(house$is_furnished~ house$has_alarm, main = "Mosaic Plot of property is furnished or not by alarm", ylab="alarm", xlab="Property is furnished")
+#Number of Properties without alarm being unfurnished are high
+
+```
+
+```{r}
+mosaicplot(house$is_furnished~ house$heating, main = "Mosaic Plot of property is furnished or not by heating", ylab="heating", xlab="Property is furnished")
+#Number of Properties with autonomous heating being unfurnished are high
+
+```
+
+```{r}
+mosaicplot(house$is_furnished~ house$has_air_conditioning, main = "Mosaic Plot of property is furnished or not by has_air_conditioning", ylab="has_air_conditioning", xlab="Property is furnished")
+#Number of Properties without air conditioning being unfurnished are high
+
+```
+
+```{r}
+mosaicplot(house$is_furnished~ house$has_parking, main = "Mosaic Plot of property is furnished or not by has_parking", ylab="has_parking", xlab="Property is furnished")
+#Number of Properties without parking being unfurnished are high
+```
+
+
+```{r}
+# Model 1
+# This is our maximal model that includes all variables without quadratic terms and interactions.
+
+m1.glm<-glm(house$is_furnished~., family = "binomial",data = house)
+summary(m1.glm)
+```
+> Maximal model with has_terrace and has_air_conditioning appearing significant
+
+```{r}
+exp(coef(m1.glm))
+```
+>For one unit increase in mq, the odds of property being furnished increase by factor of 1.00(increase by small amount)
+
+```{r}
+#Step Function
+
+step(m1.glm)
+```
+> Lowest AIC value 446.22
+
+```{r}
+# Model 2
+# Using the variables from least AIC value.
+
+m2.glm <- glm(house$is_furnished ~ has_terrace + has_air_conditioning + has_parking, family = "binomial", data=house)
+
+summary(m2.glm)
+```
+> Intercept, has_terrace and has_air_conditioning are significant variables
+  AIC value 446.22
+
+
+```{r}
+# Model 3
+# Removing the insignificant variable has_parking from the model 2.
+
+m3.glm <- glm(house$is_furnished ~ has_terrace + has_air_conditioning, family = "binomial", data=house)
+
+summary(m3.glm)
+```
+> Not significant model since AIC value increases
+
+```{r}
+# Model 4
+# Performing a model by including the interaction terms
+
+m4.glm<-glm(house$is_furnished ~ has_terrace * has_air_conditioning * has_parking, family = "binomial", data=house)
+summary(m4.glm)
+
+```
+> has_air_conditioning is significant variable
+  AIC value 451.55, greater than previous model,use step() to check if model improves
+
+
+```{r}
+#Step Function 
+
+step(m4.glm)
+```
+> Least AIC value 446.22
+
+
+```{r}
+exp(coef(m4.glm))
+```
+>> one unit increase in has_air_conditioning, the odds of property being furnished increase by  factor of 2.4055
+
+
+```{r}
+# Model 5
+# Making a model with interactions 
+
+m5.glm <- glm(house$is_furnished ~ has_terrace + has_air_conditioning + has_parking + has_air_conditioning*id*mq*price, family = "binomial", data=house)
+
+summary(m5.glm)
+```
+> AIC value is 446.01 lower than previous models,use step() on m5
+
+```{r}
+#Step Function
+step(m5.glm)
+```
+> Lowest AIC value 438.9
+
+
+```{r}
+# Model 6
+# Taking the model of least AIC value from the previous step function.
+
+m6.glm <- glm(formula = house$is_furnished ~ has_terrace + 
+    has_air_conditioning + has_parking + id + mq + price + has_air_conditioning:id + 
+    has_air_conditioning:mq + has_air_conditioning:price + id:price + 
+    mq:price + has_air_conditioning:mq:price, family = "binomial", 
+    data = house)
+
+summary(m6.glm)
+```
+> AIC value 438.95
+
+```{r}
+exp(coef(m6.glm))
+```
+> one unit increase in has_air_conditioning, odds of property being furnished increase by factor of 5.7105
+
+```{r}
+# Model 7
+# We remove all the insignificant variables from the model6 like price, mq, id, has_air_conditioning.
+
+m7.glm<-glm(house$is_furnished ~ has_terrace
+     +has_air_conditioning:id + has_parking+
+    has_air_conditioning:mq + has_air_conditioning:price + id:price + 
+    mq:price, family = "binomial", data = house)
+
+
+summary(m7.glm)
+```
+> AIC value 432.09
+
+```{r}
+exp(coef(m7.glm))
+```
+> one unit increase in has_terrace,odds of property being furnished increase by factor of 2.12
+
+
+```{r}
+# Model 8
+# Remove has_parking from model 7
+
+m8.glm<-glm(house$is_furnished ~ has_terrace+has_air_conditioning:id +has_air_conditioning:mq + has_air_conditioning:price + id:price + 
+    mq:price, family = "binomial", data = house)
+
+
+summary(m8.glm)
+```
+> AIC value 433.97 greater than previous model
+
+```{r}
+exp(coef(m8.glm))
+```
+> one unit increase in has_terrace,odds of property being furnished increase by factor of 2.12
+  Model 7 is best performing model due to better AIC values(432.09)
+
+$$ is_furnished= -2.648+0.754\times \text{has_terrace}-14.812\times \text{has_parking}+0.00\times \text{has_air_conditioning:id}-0.0107\times \text{has_air_conditioning:mq}+0.000\times \text{has_air_conditioning:price}-0.000\times \text{id:price}+0.000\times \text{mq:price}$$
+> Equation for is_furnished wrt its coefficients derived from best performing model(m7.glm), written above with all significant variables
+
+
+# References  
+
+  Crawley, M.J., 2015.Statistics: an introduction using RJ Wiley, England
+  Check heteroscedasticity: https://www.codingprof.com/3-easy-ways-to-test-for-heteroscedasticity-in-r-examples/
+  Mode Function: https://r-lang.com/mode-in-r/
+
+
